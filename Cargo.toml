@@ -42,7 +42,8 @@ jxl = ["dep:jxl-oxide", "dep:zune-jpegxl", "dep:zune-core"]
 webp = ["image/webp-encoder"]
 # enable cli dependencies (dont use as library)
 cli = ["dep:clap", "dep:glob", "quantization", "resizing", "exif"]
-
+# enable full jpegxl encoding through libjxl
+libjxl = ["jxl", "dep:bindgen"]
 
 [dependencies]
 image = "0.24.7"
@@ -91,6 +92,10 @@ default-features = false
 version = "9.0.0"
 features = ["zopfli", "filetime"]
 default-features = false
+optional = true
+
+[build-dependencies.bindgen]
+version = "0.69.1"
 optional = true
 
 [target.'cfg(windows)'.dependencies.glob]

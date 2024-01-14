@@ -1,6 +1,7 @@
 use std::{error::Error, path::PathBuf, str::FromStr, process::Stdio, thread};
 use std::io::{BufReader, BufRead, Write};
-use std::sync::mpsc;
+use std::sync::{Arc, mpsc};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use clap::{arg, value_parser, ArgAction, Command};
 
@@ -165,14 +166,18 @@ fn exiftool_copy_metadata(
     backup: bool,
 ) -> Result<(), Box<dyn Error>> {
     let (stdout_transmitter, rx) = mpsc::channel();
-    let stderr_transmitter=stdout_transmitter.clone();
 
-    let mut exiftool_process = std::process::Command::new("exiftool")
+    let exiftool_process_result = std::process::Command::new("exiftool")
         .args(["-stay_open", "true", "-@", "-"])
         .stdin(Stdio::piped() )
         .stdout( Stdio::piped() )
         .stderr( Stdio::piped() )
-        .spawn()?;
+        .spawn();
+
+    if exiftool_process_result.is_err() {
+        println!("This build of rimage requires exiftool (https://exiftool.org) available in the working directory.");
+    }
+    let mut exiftool_process = exiftool_process_result?;
 
     // Take ownership of stdout so we can pass to a separate thread.
     let exiftool_stdout = exiftool_process
@@ -190,13 +195,17 @@ fn exiftool_copy_metadata(
     let exiftool_stdin = exiftool_process.stdin.as_mut().unwrap();
 
     // Create a separate thread to loop over stdout
-    // We are not going to join the tread or anything like that, so we don't need the return
-    // value, but if we did want to do something with it, we could.
-    let _stdout_thread = thread::spawn(move || {
+    let stop_signal = Arc::new(AtomicBool::new(false));
+    let _stdout_thread = thread::spawn({ let stop_stdout = stop_signal.clone();
+                                           move || {
         let stdout_lines = BufReader::new(exiftool_stdout).lines();
 
         for line in stdout_lines {
             let line = line.unwrap();
+
+            if stop_stdout.load(Ordering::SeqCst) {
+                return;
+            }
 
             // Check to see if our processing has finished, if it has we will send a message to our main thread.
             if line=="{ready}" {
@@ -204,24 +213,30 @@ fn exiftool_copy_metadata(
             }
             else {
                 // Do some processing out the output from our command. In this case we will just print it.
-                println!("->{}", line);
+                println!("exiftool: {}", line);
             }
         }
-    });
+    }});
 
     // Create a separate thread to loop over stderr
-    // Anything which comes through stderr will just be sent back to our calling thread, and will trip an error.
-    let _stderr_thread = thread::spawn(move || {
+    // Anything which comes through stderr will be send to console.
+    let _stderr_thread = thread::spawn({ let stop_stderr = stop_signal.clone();
+                                           move || {
         let stderr_lines = BufReader::new(exiftool_stderr).lines();
         for line in stderr_lines {
             let line = line.unwrap();
-            stderr_transmitter.send(line).unwrap();
+            println!("exiftool: {}", line);
+
+            if stop_stderr.load(Ordering::SeqCst) {
+                return
+            }
+        }
         }
     });
 
     // Loop over target files
     iterator.into_iter()
-        .for_each(move |(mut input, output): (PathBuf, PathBuf)| {
+        .for_each( |(mut input, output): (PathBuf, PathBuf)| {
                 if backup {
                     input = PathBuf::from(format!("{}.backup", input.as_os_str().to_str().unwrap()));
                 }
@@ -236,10 +251,15 @@ fn exiftool_copy_metadata(
                 let received = rx.recv().unwrap(); // wait for the command to finish
                 if received=="{ready}" {
                     println!("{input:?} metadata copied to {output:?}")
-                } else {
-                    println!("{input:?} metadata FAILED to copy to {output:?}")
                 }
             });
+
+    // Close exiftool
+    stop_signal.store(true, Ordering::SeqCst);
+    exiftool_stdin.write(b"-stay_open\nFalse\n-execute\n").unwrap();
+    _stdout_thread.join().unwrap();
+    _stderr_thread.join().unwrap();
+    exiftool_process.kill()?;
 
     Ok(())
 }

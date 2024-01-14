@@ -1,8 +1,4 @@
-use std::{error::Error, path::PathBuf, str::FromStr, process::Stdio, thread};
-use std::io::{BufReader, BufRead, Write};
-use std::sync::{Arc, mpsc};
-use std::sync::atomic::{AtomicBool, Ordering};
-
+use std::{error::Error, path::PathBuf, str::FromStr};
 use clap::{arg, value_parser, ArgAction, Command};
 
 #[cfg(feature = "parallel")]
@@ -13,6 +9,11 @@ use rimage::config::{Codec, EncoderConfig, QuantizationConfig, ResizeConfig, Res
 
 mod optimize;
 mod paths;
+
+#[cfg(feature = "exiftool")]
+mod exiftool;
+#[cfg(feature = "exiftool")]
+use crate::exiftool::ExifTool;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let matches = Command::new("rimage")
@@ -116,6 +117,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         .map(|v| v.into())
         .collect();
 
+    // start exiftool (do this before so the slow startup time can happen parallel to encoding)
+    #[cfg(feature = "exiftool")]
+    let mut exiftool = ExifTool::new()?;
+
     let out_dir = matches.get_one::<PathBuf>("output").map(|p| p.into());
     let suffix = matches.get_one::<String>("suffix").map(|p| p.into());
     let recursive = matches.get_one::<bool>("recursive").unwrap_or(&false);
@@ -134,7 +139,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         *backup,
     );
 
-//    #[cfg(feature = "exiftool")]
+    // issue commands to exiftool to copy metadata
+    #[cfg(feature = "exiftool")]
     {
         #[cfg(feature = "parallel")]
         let path_vector: Vec<_> = paths::get_paths(
@@ -154,112 +160,8 @@ fn main() -> Result<(), Box<dyn Error>> {
             *recursive,
         );
 
-        exiftool_copy_metadata(path_vector, *backup)?;
+        exiftool.copy_metadata(path_vector, *backup)?;
     }
-
-    Ok(())
-}
-
-//#[cfg(feature = "exiftool")]
-fn exiftool_copy_metadata(
-    iterator: impl IntoIterator<Item = (PathBuf, PathBuf)>,
-    backup: bool,
-) -> Result<(), Box<dyn Error>> {
-    let (stdout_transmitter, rx) = mpsc::channel();
-
-    let exiftool_process_result = std::process::Command::new("exiftool")
-        .args(["-stay_open", "true", "-@", "-"])
-        .stdin(Stdio::piped() )
-        .stdout( Stdio::piped() )
-        .stderr( Stdio::piped() )
-        .spawn();
-
-    if exiftool_process_result.is_err() {
-        println!("This build of rimage requires exiftool (https://exiftool.org) available in the working directory.");
-    }
-    let mut exiftool_process = exiftool_process_result?;
-
-    // Take ownership of stdout so we can pass to a separate thread.
-    let exiftool_stdout = exiftool_process
-        .stdout
-        .take()
-        .expect("Could not take stdout");
-
-    // Take ownership of stdin so we can pass to a separate thread.
-    let exiftool_stderr = exiftool_process
-        .stderr
-        .take()
-        .expect("Could not take stderr");
-
-    // Grab stdin so we can pipe commands to ExifTool
-    let exiftool_stdin = exiftool_process.stdin.as_mut().unwrap();
-
-    // Create a separate thread to loop over stdout
-    let stop_signal = Arc::new(AtomicBool::new(false));
-    let _stdout_thread = thread::spawn({ let stop_stdout = stop_signal.clone();
-                                           move || {
-        let stdout_lines = BufReader::new(exiftool_stdout).lines();
-
-        for line in stdout_lines {
-            let line = line.unwrap();
-
-            if stop_stdout.load(Ordering::SeqCst) {
-                return;
-            }
-
-            // Check to see if our processing has finished, if it has we will send a message to our main thread.
-            if line=="{ready}" {
-                stdout_transmitter.send(line).unwrap();
-            }
-            else {
-                // Do some processing out the output from our command. In this case we will just print it.
-                println!("exiftool: {}", line);
-            }
-        }
-    }});
-
-    // Create a separate thread to loop over stderr
-    // Anything which comes through stderr will be send to console.
-    let _stderr_thread = thread::spawn({ let stop_stderr = stop_signal.clone();
-                                           move || {
-        let stderr_lines = BufReader::new(exiftool_stderr).lines();
-        for line in stderr_lines {
-            let line = line.unwrap();
-            println!("exiftool: {}", line);
-
-            if stop_stderr.load(Ordering::SeqCst) {
-                return
-            }
-        }
-        }
-    });
-
-    // Loop over target files
-    iterator.into_iter()
-        .for_each( |(mut input, output): (PathBuf, PathBuf)| {
-                if backup {
-                    input = PathBuf::from(format!("{}.backup", input.as_os_str().to_str().unwrap()));
-                }
-
-                let cmd = format!(
-                    "-overwrite_original_in_place\n-tagsFromFile\n{}\n{}\n-execute\n",
-                    input.as_os_str().to_str().unwrap(),
-                    output.as_os_str().to_str().unwrap()
-                );
-
-                exiftool_stdin.write(cmd.as_bytes()).unwrap();
-                let received = rx.recv().unwrap(); // wait for the command to finish
-                if received=="{ready}" {
-                    println!("{input:?} metadata copied to {output:?}")
-                }
-            });
-
-    // Close exiftool
-    stop_signal.store(true, Ordering::SeqCst);
-    exiftool_stdin.write(b"-stay_open\nFalse\n-execute\n").unwrap();
-    _stdout_thread.join().unwrap();
-    _stderr_thread.join().unwrap();
-    exiftool_process.kill()?;
 
     Ok(())
 }

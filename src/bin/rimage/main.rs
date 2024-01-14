@@ -227,7 +227,7 @@ fn exiftool_copy_metadata(
                 }
 
                 let cmd = format!(
-                    "-overwrite_original_in_place -tagsFromFile \"{}\" \"{}\"\n-execute\n",
+                    "-overwrite_original_in_place\n-tagsFromFile\n{}\n{}\n-execute\n",
                     input.as_os_str().to_str().unwrap(),
                     output.as_os_str().to_str().unwrap()
                 );

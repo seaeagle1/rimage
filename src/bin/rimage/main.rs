@@ -1,6 +1,11 @@
-use std::{error::Error, path::PathBuf, str::FromStr};
+use std::{error::Error, path::PathBuf, str::FromStr, process::Stdio, thread};
+use std::io::{BufReader, BufRead, Write};
+use std::sync::mpsc;
 
 use clap::{arg, value_parser, ArgAction, Command};
+
+#[cfg(feature = "parallel")]
+use rayon::{iter::IntoParallelIterator, iter::ParallelIterator};
 
 use paths::collect_files;
 use rimage::config::{Codec, EncoderConfig, QuantizationConfig, ResizeConfig, ResizeType};
@@ -114,18 +119,127 @@ fn main() -> Result<(), Box<dyn Error>> {
     let suffix = matches.get_one::<String>("suffix").map(|p| p.into());
     let recursive = matches.get_one::<bool>("recursive").unwrap_or(&false);
     let backup = matches.get_one::<bool>("backup").unwrap_or(&false);
+    let filelist = collect_files(files);
 
     optimize::optimize_files(
         paths::get_paths(
-            collect_files(files),
-            out_dir,
-            suffix,
+            filelist.clone(),
+            out_dir.clone(),
+            suffix.clone(),
             codec.to_extension(),
             *recursive,
         ),
         conf,
         *backup,
     );
+
+//    #[cfg(feature = "exiftool")]
+    {
+        #[cfg(feature = "parallel")]
+        let path_vector: Vec<_> = paths::get_paths(
+            filelist,
+            out_dir,
+            suffix,
+            codec.to_extension(),
+            *recursive,
+        ).into_par_iter().collect();
+
+        #[cfg(not(feature = "parallel"))]
+        let path_vector = paths::get_paths(
+            filelist,
+            out_dir,
+            suffix,
+            codec.to_extension(),
+            *recursive,
+        );
+
+        exiftool_copy_metadata(path_vector, *backup)?;
+    }
+
+    Ok(())
+}
+
+//#[cfg(feature = "exiftool")]
+fn exiftool_copy_metadata(
+    iterator: impl IntoIterator<Item = (PathBuf, PathBuf)>,
+    backup: bool,
+) -> Result<(), Box<dyn Error>> {
+    let (stdout_transmitter, rx) = mpsc::channel();
+    let stderr_transmitter=stdout_transmitter.clone();
+
+    let mut exiftool_process = std::process::Command::new("exiftool")
+        .args(["-stay_open", "true", "-@", "-"])
+        .stdin(Stdio::piped() )
+        .stdout( Stdio::piped() )
+        .stderr( Stdio::piped() )
+        .spawn()?;
+
+    // Take ownership of stdout so we can pass to a separate thread.
+    let exiftool_stdout = exiftool_process
+        .stdout
+        .take()
+        .expect("Could not take stdout");
+
+    // Take ownership of stdin so we can pass to a separate thread.
+    let exiftool_stderr = exiftool_process
+        .stderr
+        .take()
+        .expect("Could not take stderr");
+
+    // Grab stdin so we can pipe commands to ExifTool
+    let exiftool_stdin = exiftool_process.stdin.as_mut().unwrap();
+
+    // Create a separate thread to loop over stdout
+    // We are not going to join the tread or anything like that, so we don't need the return
+    // value, but if we did want to do something with it, we could.
+    let _stdout_thread = thread::spawn(move || {
+        let stdout_lines = BufReader::new(exiftool_stdout).lines();
+
+        for line in stdout_lines {
+            let line = line.unwrap();
+
+            // Check to see if our processing has finished, if it has we will send a message to our main thread.
+            if line=="{ready}" {
+                stdout_transmitter.send(line).unwrap();
+            }
+            else {
+                // Do some processing out the output from our command. In this case we will just print it.
+                println!("->{}", line);
+            }
+        }
+    });
+
+    // Create a separate thread to loop over stderr
+    // Anything which comes through stderr will just be sent back to our calling thread, and will trip an error.
+    let _stderr_thread = thread::spawn(move || {
+        let stderr_lines = BufReader::new(exiftool_stderr).lines();
+        for line in stderr_lines {
+            let line = line.unwrap();
+            stderr_transmitter.send(line).unwrap();
+        }
+    });
+
+    // Loop over target files
+    iterator.into_iter()
+        .for_each(move |(mut input, output): (PathBuf, PathBuf)| {
+                if backup {
+                    input = PathBuf::from(format!("{}.backup", input.as_os_str().to_str().unwrap()));
+                }
+
+                let cmd = format!(
+                    "-overwrite_original_in_place -tagsFromFile \"{}\" \"{}\"\n-execute\n",
+                    input.as_os_str().to_str().unwrap(),
+                    output.as_os_str().to_str().unwrap()
+                );
+
+                exiftool_stdin.write(cmd.as_bytes()).unwrap();
+                let received = rx.recv().unwrap(); // wait for the command to finish
+                if received=="{ready}" {
+                    println!("{input:?} metadata copied to {output:?}")
+                } else {
+                    println!("{input:?} metadata FAILED to copy to {output:?}")
+                }
+            });
 
     Ok(())
 }

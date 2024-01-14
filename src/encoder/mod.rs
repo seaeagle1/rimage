@@ -8,6 +8,8 @@ use std::io::{Seek, Write};
 
 use crate::config::EncoderConfig;
 use crate::config::ResizeType;
+#[cfg(feature = "libjxl")]
+mod libjxl;
 
 /// A struct for encoding images using various codecs.
 pub struct Encoder<W: Write + Seek> {

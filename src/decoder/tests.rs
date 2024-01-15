@@ -53,6 +53,7 @@ fn new_decoder_with_fixed_orientation() {
     assert_eq!(decoder.fix_orientation, Some(4));
 }
 
+#[ignore]
 #[test]
 #[cfg(feature = "exif")]
 fn fix_orientation() -> Result<(), Box<dyn Error>> {

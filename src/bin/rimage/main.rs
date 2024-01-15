@@ -1,7 +1,7 @@
 use std::{error::Error, path::PathBuf, str::FromStr};
 use clap::{arg, value_parser, ArgAction, Command};
 
-#[cfg(feature = "parallel")]
+#[cfg(all(feature = "exiftool", feature = "parallel"))]
 use rayon::{iter::IntoParallelIterator, iter::ParallelIterator};
 
 use paths::collect_files;

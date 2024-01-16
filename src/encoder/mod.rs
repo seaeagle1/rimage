@@ -8,6 +8,7 @@ use std::io::{Seek, Write};
 
 use crate::config::EncoderConfig;
 use crate::config::ResizeType;
+
 #[cfg(feature = "libjxl")]
 mod libjxl;
 
@@ -278,7 +279,7 @@ impl<W: Write + Seek + std::panic::UnwindSafe> Encoder<W> {
         self.data.write_to(&mut self.w, ImageFormat::Png)
     }
 
-    #[cfg(feature = "jxl")]
+    #[cfg(all(feature = "jxl",not(feature = "libjxl")))]
     fn encode_jpegxl(mut self) -> ImageResult<()> {
         use crate::error::JxlEncodingError;
         use zune_core::bit_depth::BitDepth;
@@ -319,6 +320,28 @@ impl<W: Write + Seek + std::panic::UnwindSafe> Encoder<W> {
         })?;
 
         self.w.write_all(&data)?;
+
+        Ok(())
+    }
+
+    #[cfg(feature = "libjxl")]
+    fn encode_jpegxl(mut self) -> ImageResult<()> {
+        use libjxl::LibJxlEncoder;
+
+        let mut encoder = LibJxlEncoder::new();
+        if self.conf.quality() >= 100.0 {
+            encoder = encoder.with_lossless();
+        } else {
+            encoder = encoder.with_lossy_distance(
+                LibJxlEncoder::DistanceFromQuality(self.conf.quality()));
+        }
+
+        encoder.encode(self.w, self.data).map_err(|e| {
+            ImageError::Encoding(EncodingError::new(
+                ImageFormatHint::Name("JpegXL".to_string()),
+                e,
+            ))
+        })?;
 
         Ok(())
     }

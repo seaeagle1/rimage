@@ -10,9 +10,10 @@ fn main() {
         // Tell cargo to look for shared libraries in the specified directory
         println!("cargo:rustc-link-search=include/jxl/bin");
 
-        // Tell cargo to tell rustc to link the system bzip2
+        // Tell cargo to tell rustc to link the system
         // shared library.
         println!("cargo:rustc-link-lib=jxl");
+        println!("cargo:rustc-link-lib=jxl_threads");
 
         // Tell cargo to invalidate the built crate whenever the wrapper changes
         println!("cargo:rerun-if-changed=wrapper.h");
@@ -28,6 +29,8 @@ fn main() {
             .clang_arg("-Iinclude")
             // Tell cargo to invalidate the built crate whenever any of the
             // included header files changed.
+            .allowlist_type("Jxl.*")
+            .allowlist_function("Jxl.*")
             .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
             // Finish the builder and generate the bindings.
             .generate()

@@ -19,7 +19,7 @@ jobs:
     - name: Add Lunar packages
       run: sudo add-apt-repository "deb http://us.archive.ubuntu.com/ubuntu/ lunar universe"
     - name: Install JpegXL
-      run: sudo apt-get update && sudo apt-get install -y libjxl-dev
+      run: sudo apt-get update && sudo apt-get install -y -t lunar libjxl-dev liblcms2-2
     - name: Build
       run: cargo build --verbose --features default,libjxl,exiftool
     - name: Run tests

@@ -1,0 +1,6 @@
+#ifndef JXL_THREADS_EXPORT_H
+#define JXL_THREADS_EXPORT_H
+
+#define JXL_THREADS_EXPORT
+
+#endif /* JXL_THREADS_EXPORT_H */

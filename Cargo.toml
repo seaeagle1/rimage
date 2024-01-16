@@ -12,6 +12,7 @@ readme = "README.md"
 repository = "https://github.com/SalOne22/rimage"
 version = "0.10.2"
 edition = "2021"
+build = "build.rs"
 
 [[bin]]
 name = "rimage"
@@ -44,6 +45,8 @@ webp = ["image/webp-encoder"]
 cli = ["dep:clap", "dep:glob", "quantization", "resizing", "exif"]
 # enable exiftool copying of metadata
 exiftool = []
+# enable full jpegxl encoding through libjxl
+libjxl = ["jxl", "dep:bindgen"]
 
 [dependencies]
 image = "0.24.7"
@@ -93,6 +96,9 @@ version = "9.0.0"
 features = ["zopfli", "filetime"]
 default-features = false
 optional = true
+
+[build-dependencies]
+bindgen = {version = "0.69.1", optional = true}
 
 [target.'cfg(windows)'.dependencies.glob]
 optional = true

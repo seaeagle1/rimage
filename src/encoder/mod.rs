@@ -325,7 +325,7 @@ impl<W: Write + Seek + std::panic::UnwindSafe> Encoder<W> {
     }
 
     #[cfg(feature = "libjxl")]
-    fn encode_jpegxl(mut self) -> ImageResult<()> {
+    fn encode_jpegxl(self) -> ImageResult<()> {
         use libjxl::LibJxlEncoder;
 
         let mut encoder = LibJxlEncoder::new();

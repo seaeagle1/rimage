@@ -13,7 +13,7 @@ use thiserror::Error;
 
 #[derive(Error,Debug)]
 pub enum Error {
-    #[error("JxlEncoder{} failed",0)]
+    #[error("JxlEncoder{0} failed")]
     JxlEncoder(String),
 }
 
@@ -74,9 +74,9 @@ impl LibJxlEncoder {
             let output_processor = JxlEncoderOutputProcessor {
                 opaque: Box::into_raw(output_box) as *mut c_void,
                 get_buffer: Some(outputGetBuffer),
-                release_buffer: None,
-                seek: None,
-                set_finalized_position: None,
+                release_buffer: Some(outputReleaseBuffer),
+                seek: Some(outputSeek),
+                set_finalized_position: Some(outputSetFinal),
             };
             if JxlEncoderSetOutputProcessor(encoder, output_processor)
                 != JxlEncoderStatus_JXL_ENC_SUCCESS {
@@ -273,3 +273,5 @@ unsafe extern "C" fn outputSeek(opaque: *mut c_void, position: u64) {
     let s = &mut *(opaque as *mut OutputProcessorStruct);
     s.stream.seek(SeekFrom::Start(&s.stream_start + position)).expect("Seeking JXL output failed");
 }
+
+unsafe extern "C" fn outputSetFinal(_opaque: *mut c_void, _finalized_position: u64) {}

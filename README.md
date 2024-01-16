@@ -7,6 +7,9 @@
 
 A powerful Rust image optimization CLI tool and library inspired by [squoosh!](https://squoosh.app/).
 
+**This is a fork providing lossy JpegXL encoding and metadata copying using exiftool**
+libjxl and exiftool are external dependencies
+
 ## Overview
 
 Rimage simplifies and enhances your image optimization workflows. Optimize images effortlessly, set quality levels, and apply advanced techniques with ease. Ideal for web apps, mobile apps, and desktop software.

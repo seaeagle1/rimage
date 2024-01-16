@@ -16,11 +16,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Add Lunar packages
-      run: sudo add-apt-repository "deb http://us.archive.ubuntu.com/ubuntu/ mantic universe" 
-    - name: Install JpegXL
-      run: sudo apt-get update && sudo apt-get install -y liblcms2-2=2.14-2 libjxl-dev
+#    - name: Install JpegXL
+#      run: sudo apt-get update && sudo apt-get install -y libjxl-dev
     - name: Build
-      run: cargo build --verbose --features default,libjxl,exiftool
+      run: cargo build --verbose --features default,exiftool
     - name: Run tests
       run: cargo test --verbose

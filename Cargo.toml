@@ -19,9 +19,9 @@ name = "rimage"
 required-features = ["cli"]
 
 [profile.release]
-lto = true
+lto = "fat"
 codegen-units = 1
-opt-level = "z"
+opt-level = "s"
 
 [features]
 default = ["cli", "parallel", "quantization", "resizing", "exif", "oxipng"]

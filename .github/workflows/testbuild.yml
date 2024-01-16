@@ -16,7 +16,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    - name: Install xmllint
+      run: sudo apt-get install -y libjxl-dev
     - name: Build
-      run: cargo build --verbose --features default,exiftool
+      run: cargo build --verbose --features default,libjxl,exiftool
     - name: Run tests
       run: cargo test --verbose

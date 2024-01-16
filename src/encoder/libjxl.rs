@@ -135,7 +135,7 @@ impl LibJxlEncoder {
                 _ => 0
             };
             let basic_info = Box::new(JxlBasicInfo {
-                have_container: 0,
+                have_container: 1,
                 xsize: imgdata.width(),
                 ysize: imgdata.height(),
                 bits_per_sample: (imgdata.color().bits_per_pixel()
@@ -173,6 +173,11 @@ impl LibJxlEncoder {
             if JxlEncoderSetBasicInfo(encoder, &*basic_info)
                 != JxlEncoderStatus_JXL_ENC_SUCCESS {
                 return Err(Error::JxlEncoder("SetBasicInfo".to_string()));
+            }
+
+            if JxlEncoderUseContainer(encoder, 1)
+                != JxlEncoderStatus_JXL_ENC_SUCCESS {
+                return Err(Error::JxlEncoder("UseContainer".to_string()));
             }
 
             if JxlEncoderSetCodestreamLevel(encoder, 5)

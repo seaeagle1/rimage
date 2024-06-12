@@ -5,180 +5,169 @@
 [![version](https://img.shields.io/crates/v/rimage?style=flat-square)](https://crates.io/crates/rimage)
 [![license](https://img.shields.io/crates/l/rimage?style=flat-square)](https://github.com/SalOne22/rimage)
 
-A powerful Rust image optimization CLI tool and library inspired by [squoosh!](https://squoosh.app/).
+A powerful Rust image optimization CLI tool inspired by [squoosh!](https://squoosh.app/).
 
-## Overview
-
-Rimage simplifies and enhances your image optimization workflows. Optimize images effortlessly, set quality levels, and apply advanced techniques with ease. Ideal for web apps, mobile apps, and desktop software.
+:warning: WARNING: This documentation works only for latest version of rimage! You can get latest version from [releases](https://github.com/SalOne22/rimage/releases) tab or explicitly with cargo: `cargo install rimage@0.11.0-next.1`
 
 ## Features
 
-- **Flexible Format Conversion**: Supports modern image formats: JPEG, JPEG XL, PNG, AVIF, WebP.
-- **Quality Control**: Fine-tune image quality with an intuitive interface.
-- **Parallel Optimization**: Optimize multiple images in parallel.
-- **Quantization and Dithering**: Advanced control for experts.
-- **Image Resizing**: Easy resizing with the `resize` crate.
+- Modern codecs:
+  - Rimage uses modern codecs optimized to produce tiny images
+  - Under the hood uses `zune_image` crate that enhances performance
+- Optimization operations:
+  - Rimage provides several image optimization operation
+  - Resize - uses `fast_image_resize` crate that has incredible performance
+  - Quantization - allowing to reduce image palette
 
 ## Installation
 
-Dependencies:  
-On x86_64 macos requires libjxl installed.
-
 You can download latest release from the [releases](https://github.com/SalOne22/rimage/releases) tab.
 
-Alternatively you can build rimage from source if you have `rust`, `cargo`, `nasm` and `cmake` installed:
+If you're a Rust programmer, rimage can be installed with `cargo`.
 
 ```sh
 cargo install rimage
 ```
 
-## Note
+Alternatively, one can use [cargo binstall](https://github.com/cargo-bins/cargo-binstall) to install a rimage binary directly from GitHub:
 
-1. The `-q` opinion is disabled when pics are converted to Jxl(JpegXL) format.
+```sh
+cargo binstall rimage
+```
 
-2. You'd better not use the process to convert a pic with _ICC tag_ for avoiding color confusion.
-
-3. If you're a user who just want to **use Rimage easily with a friendly GUI**, [Rimage_gui](https://github.com/Mikachu2333/rimage_gui/releases/) may be fit for you, it support both Chinese and English. Just select the version you need and download it to use.
+> ### Note
+>
+> If you're a user who just want to **use Rimage easily with a friendly GUI**, [Rimage_gui](https://github.com/Mikachu2333/rimage_gui/releases/) may be fit for you, it support both Chinese and English. Just select the version you need and download it to use.
 
 ## Usage
 
-```text
-Usage: rimage [OPTIONS] <FILES>...
+```
+Optimize images natively with best-in-class codecs
 
-Arguments:
-  <FILES>...  Input file(s) to process
+Usage: rimage [COMMAND]
+
+Commands:
+  avif      Encode images into AVIF format. (Small and Efficient)
+  farbfeld  Encode images into Farbfeld format. (Bitmapped)
+  jpeg      Encode images into JPEG format. (Progressive-able)
+  jpeg_xl   Encode images into JpegXL format. (Big but Lossless)
+  mozjpeg   Encode images into JPEG format using MozJpeg codec. (RECOMMENDED and Small)
+  oxipng    Encode images into PNG format using OxiPNG codec. (Progressive-able)
+  png       Encode images into PNG format.
+  ppm       Encode images into PPM format. (Bitmapped)
+  qoi       Encode images into QOI format. (Trendy and Small)
+  webp      Encode images into WebP format. (Lossless-able)
+  help      Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help     Print help
   -V, --version  Print version
-
-General:
-  -q, --quality <QUALITY>         Optimization image quality, disabled when use Jpegxl format
-                                  [range: 1 - 100] [default: 75]
-  -f, --codec <CODEC>             Image codec to use
-                                  [default: jpg] [possible values: png, oxipng, jpegxl, webp, avif]
-  -o, --output <DIR>              Write output file(s) to <DIR>, if "-r" option is not used
-  -r, --recursive                 Saves output file(s) preserving folder structure
-  -s, --suffix [<SUFFIX>]         Appends suffix to output file(s) names
-  -b, --backup                    Appends ".backup" suffix to input file(s) extension
-  -t, --threads                   Number of threads to use, more will run faster, but too many may crash
-                                  [range: 1 - 16] [integer only] [default: number of cores]
-
-Quantization:
-      --quantization [<QUALITY>]  Enables quantization with optional quality
-                                  [range: 1 - 100] [default: 75]
-      --dithering [<QUALITY>]     Enables dithering with optional quality
-                                  [range: 1 - 100] [default: 75]
-
-Resizing:
-      --width <WIDTH>             Resize image with specified width
-                                  [integer only]
-      --height <HEIGHT>           Resize image with specified height
-                                  [integer only]
-      --filter <FILTER>           Filter used for image resizing
-                                  [possible values: point, triangle, catrom, mitchell] [default: lanczos3]
 ```
 
-Note that image formats may wary from features that are used when building `rimage`.
+### Basic optimization suitable for web
 
-_Full_ List of supported codecs with all features:
-
-- `mozjpeg`, `jpeg`, `jpg` => **mozjpeg codec (common and small)**
-- `png` => browser png codec without compression
-- `oxipng` => oxipng codec with compression
-- `jpegxl`, `jxl` => jpeg xl codec
-- `webp` => webp codec
-- `avif` => avif codec
-
-_Full_ List of available resize filters:
-
-- `point` => Point resizing
-- `triangle` => Triangle (bilinear) resizing
-- `catmull-rom`, `catrom` => Catmull-Rom (bicubic) resizing
-- `mitchell` => Resize using Mitchell-Netravali filter
-- `lanczos3` => Resize using Sinc-windowed Sinc with radius of 3
-
-## Example
-
-### png => jpg & quality => 90 & backup
-
-| Image Path                      | Quality | Out Format | Out Dir                   | Backup |
-| ------------------------------- | ------- | ---------- | ------------------------- | ------ |
-| "D:\\Desktop\\input [text].png" | 90      | jpg        | "D:\\Desktop\\OutputTest" | True   |
+To optimize images with great defaults, you can simply call `rimage <command>`. For example:
 
 ```sh
-rimage.exe "D:\\Desktop\\input [text].png" -q 90 -f jpg -o "D:\\Desktop\\OutputTest" -b
+rimage mozjpeg ./image.jpg
 ```
 
-### suffix & recursive & quantization & dithering
-
-| Image Path                    | Quality | Out Format | Suffix | Recursive | Quantization | Dithering |
-| ----------------------------- | ------- | ---------- | ------ | --------- | ------------ | --------- |
-| "C:\\中 文\\ソフトウェア.PNG" | 40      | png        | \_문자 | True      | 95           | 85        |
+By default rimage will place output images right in place of precious images, resulting in overwrite if input and output has the same format. To change this behavior you can use this options:
 
 ```sh
-rimage.exe "C:\\中  文\\ソフトウェア.PNG" -q 40 --codec png -s "_문자" -r --quantization 95 --dithering 85
+# will place output images in `./output` directory, images may be overwritten if has the same name
+rimage mozjpeg -d ./output ./image.jpg
+
+# will rename all input files before processing with `@backup` suffix
+rimage mozjpeg --backup ./image.jpg
+
+# will place output images in ./output directory preserving folder structure
+rimage mozjpeg -d ./output -r ./inner/image.jpg ./image.jpg
 ```
 
-### jpg => webp & threads &resize width and height (both are opinional)
+### Preprocessing
 
-| Image Path                  | Quality | Out Format | Out Dir             | Threads | Width | Height |
-| --------------------------- | ------- | ---------- | ------------------- | ------- | ----- | ------ |
-| "C:\\Docs\\justfortest.JPG" | 40      | webp       | "C:\\Desktop\\Test" | 4       | 60    | 10     |
+Rimage has pipeline preprocessing options. Simple usage:
 
 ```sh
-rimage.exe "C:\\Docs\\justfortest.PNG" --quality 40 --codec webp --output "C:\\Desktop\\Test" --threads 4 --width 60 --height 10
+# will resize image to specified dimensions
+rimage mozjpeg --resize 500x200 ./image.jpg
 ```
 
-## Library Installation
-
-Add Rimage to your project with Cargo:
+If you want to run preprocessing pipeline in specific order, you can do this:
 
 ```sh
-cargo add rimage
+# will quantize image with 80% quality, after run resize to 64x64 pixels using the Nearest filter.
+rimage mozjpeg --quantization 80 --resize 64x64 --filter nearest ./image.jpg
+
+# will resize image to 64x64 pixels using the Nearest filter, and after run quantization with 80% quality.
+rimage mozjpeg --resize 64x64 --filter nearest --quantization 80 ./image.jpg
 ```
 
-Or add this to your `Cargo.toml`:
+Note that some preprocessing option are order independent. For example filter option, will apply resize filter to all resize invocations. Same for dithering, applies to every quantization invocations.
 
-```toml
-[dependencies]
-rimage = "0.10.2"
+### Advanced options
+
+If you want customize optimization you can provide additional options to encoders. For mozjpeg this options are valid:
+
+```
+Options:
+  -q, --quality <NUM>         Quality, values 60-80 are recommended. [default: 75]
+      --chroma_quality <NUM>  Separate chrome quality.
+      --baseline              Set to use baseline encoding (by default is progressive).
+      --no_optimize_coding    Set to make files larger for no reason.
+      --smoothing <NUM>       Use MozJPEG's smoothing.
+      --colorspace <COLOR>    Set color space of JPEG being written. [default: ycbcr] [possible values: ycbcr, grayscale, rgb]
+      --multipass             Specifies whether multiple scans should be considered during trellis quantization.
+      --subsample <PIX>       Sets chroma subsampling.
+      --qtable <TABLE>        Use a specific quantization table. [default: NRobidoux] [possible values: AhumadaWatsonPeterson, AnnexK, Flat, KleinSilversteinCarney, MSSSIM, NRobidoux, PSNRHVS, PetersonAhumadaWatson, WatsonTaylorBorthwick]
 ```
 
-## Library Usage
+For more info use `rimage help <command>`
 
-### Decoding
+For library usage check [Docs.rs](https://docs.rs/rimage/latest/rimage/)
 
-```rs
-use rimage::Decoder;
+### List of supported Codecs
 
-let decoder = Decoder::from_path("image.jpg")?;
+| Image Codecs | Decoder       | Encoder                 | NOTE                                                 |
+| ------------ | ------------- | ----------------------- | ---------------------------------------------------- |
+| avif         | libavif       | ravif                   | Common features only, Static only                    |
+| bmp          | zune-bmp      | X                       | Input only                                           |
+| farbfeld     | zune-farbfeld | zune-farbfeld           |                                                      |
+| hdr          | zune-hdr      | zune-hdr                |                                                      |
+| jpeg         | zune-jpeg     | mozjpeg or jpeg-encoder | Multifunctional when use mozjpeg encoder             |
+| jpeg-xl      | jxl-oxide     | zune-jpegxl             | Lossless only                                        |
+| png          | zune-png      | oxipng or zune-png      | Static only, Multifunctional when use oxipng encoder |
+| ppm          | zune-ppm      | zune-ppm                |                                                      |
+| psd          | zune-psd      | X                       | Input only                                           |
+| qoi          | zune-qoi      | zune-qoi                |                                                      |
+| webp         | webp          | webp                    | Static only                                          |
 
-let image = decoder.decode()?;
+### List of supported preprocessing options
 
-// do something with the image data...
+- Resize
+- Quantization
+- Alpha premultiply
+
+## Known bugs
+
+- **Dir path end with `\` may cause rimage crashes** due to a cmd bug [#72653](https://github.com/rust-lang/rust/issues/72653).
+
+### Example:
+
+This will crash:
+
+```sh
+rimage png "D:\example.jpg" -d "D:\desktop\" -s "suffix"
 ```
 
-### Encoding
+This will work as expected:
 
-```rs
-use std::fs::File;
+```sh
+rimage png "D:\example.jpg" -d "D:\desktop" -s "suf test" # without trailing backslash
 
-use rimage::{rgb::RGBA8, Encoder, config::{EncoderConfig, Codec}};
-use image::{RgbaImage, DynamicImage};
-
-let image_data = vec![0; 100 * 50 * 4];
-let image = RgbaImage::from_raw(100, 50, image_data)?;
-
-let config = EncoderConfig::new(Codec::MozJpeg).with_quality(80.0)?;
-let file = File::create("output.jpg")?;
-
-let encoder = Encoder::new(file, DynamicImage::ImageRgba8(image)).with_config(config);
-
-encoder.encode()?;
+rimage png "D:\example.jpg" -s "suffix"  -d "D:\desktop\" # backslash at the end
 ```
-
-> For full API documentation, visit [docs.rs](https://docs.rs/rimage) page.
 
 ## Contributing
 

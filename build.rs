@@ -1,7 +1,9 @@
 #[cfg(feature = "libjxl")]
 extern crate bindgen;
 
+#[cfg(feature = "libjxl")]
 use std::env;
+#[cfg(feature = "libjxl")]
 use std::path::PathBuf;
 
 fn main() {

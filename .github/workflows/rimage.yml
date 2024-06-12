@@ -2,7 +2,19 @@ name: rimage
 
 on:
   push:
+    branches:
+      - main
+    paths-ignore:
+      - ".github/**"
+      - ".gitignore"
+      - "**.md"
+      - "LICENSE**"
   pull_request:
+    paths-ignore:
+      - ".github/**"
+      - ".gitignore"
+      - "**.md"
+      - "LICENSE**"
     types:
       - opened
       - synchronize
@@ -14,8 +26,6 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
-
-    if: github.ref_type != 'tag' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.fork)
 
     strategy:
       fail-fast: false
@@ -49,9 +59,9 @@ jobs:
           - target: i686-pc-windows-msvc
             os: windows-latest
           - target: x86_64-apple-darwin
-            os: macos-latest
+            os: macos-13
           - target: aarch64-apple-darwin
-            os: macos-latest
+            os: macos-14
           - target: wasm32-unknown-emscripten
             os: macos-latest
 
@@ -79,11 +89,11 @@ jobs:
           sudo apt-get -yq update
           sudo apt-get -yq install musl-tools musl-dev:${{ matrix.target-apt-arch }}
 
-      - name: install aarch64 cross compiler
+      - name: install qemu and aarch64 cross compiler
         if: startsWith(matrix.target, 'aarch64-unknown-linux')
         run: |
           sudo apt-get -yq update
-          sudo apt-get -yq install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6:arm64
+          sudo apt-get -yq install qemu-user gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libc6:arm64
 
       - name: set musl-g++
         if: matrix.target == 'x86_64-unknown-linux-musl'
@@ -104,19 +114,21 @@ jobs:
 
       - uses: ilammy/setup-nasm@v1
 
+      - uses: taiki-e/install-action@nextest
+
       - name: install dependencies (linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get -yq update
           sudo apt-get -yq install ninja-build meson
 
       - name: install dependencies (macos)
-        if: matrix.os == 'macos-latest'
+        if: startsWith(matrix.os, 'macos')
         run: |
           brew install ninja meson
 
       - name: install dependencies (windows)
-        if: matrix.os == 'windows-latest'
+        if: startsWith(matrix.os, 'windows')
         run: |
           choco install -y ninja
           pip install meson
@@ -129,9 +141,11 @@ jobs:
         if: matrix.target != 'wasm32-unknown-emscripten'
         run: cargo build --all-features --release
 
-      - name: test
-        if: startsWith(matrix.target, 'aarch64') != true && matrix.target != 'wasm32-unknown-emscripten'
-        run: cargo test --all-features
+      - name: run tests
+        if: matrix.target != 'wasm32-unknown-emscripten'
+        run: |
+          cargo nextest run --release --all-features
+          cargo test --doc --release --all-features
 
       - name: check wasm
         if: matrix.target == 'wasm32-unknown-emscripten'

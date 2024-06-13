@@ -13,3 +13,7 @@ pub mod oxipng;
 /// WebP encoding support
 #[cfg(feature = "webp")]
 pub mod webp;
+
+/// JpegXL reference encoder
+#[cfg(feature = "libjxl")]
+pub mod libjxl;

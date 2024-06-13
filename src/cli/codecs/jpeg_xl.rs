@@ -12,3 +12,10 @@ pub fn jpeg_xl() -> Command {
         Only supports lossless encoding"#})
         .common_args()
 }
+
+pub fn libjxl() -> Command {
+    Command::new("libjxl")
+        .about("Encode images into JpegXL format using reference encoder.")
+        .long_about(indoc! {r#"Encode images into jpeg xl format."#})
+        .common_args()
+}

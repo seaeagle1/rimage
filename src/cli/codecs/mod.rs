@@ -1,7 +1,7 @@
 use clap::Command;
 
 use self::{
-    avif::avif, farbfeld::farbfeld, jpeg::jpeg, jpeg_xl::jpeg_xl, mozjpeg::mozjpeg, oxipng::oxipng,
+    avif::avif, farbfeld::farbfeld, jpeg::jpeg, jpeg_xl::jpeg_xl, jpeg_xl::libjxl, mozjpeg::mozjpeg, oxipng::oxipng,
     png::png, ppm::ppm, qoi::qoi, webp::webp,
 };
 
@@ -23,6 +23,7 @@ impl Codecs for Command {
             farbfeld(),
             jpeg(),
             jpeg_xl(),
+            libjxl(),
             mozjpeg(),
             oxipng(),
             png(),

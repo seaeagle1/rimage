@@ -5,10 +5,11 @@
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
-use std::io::{Seek, SeekFrom, Write};
+use std::io::{Write};
 use std::os::raw::c_void;
 use std::ptr::null;
-use image::{ColorType, DynamicImage};
+use zune_core::bit_depth::BitDepth;
+use zune_core::options::EncoderOptions;
 use thiserror::Error;
 
 #[derive(Error,Debug)]
@@ -17,15 +18,15 @@ pub enum Error {
     JxlEncoder(String),
 }
 
-pub struct LibJxlEncoder {
+pub struct Encoder {
     effort: i64,
     distance: f32,
 }
 
-impl LibJxlEncoder {
+impl Encoder {
     pub fn new() -> Self
     {
-        LibJxlEncoder{
+        Encoder{
             effort: 7,
             distance: 1f32,
         }
@@ -49,11 +50,11 @@ impl LibJxlEncoder {
         self
     }
 
-    pub fn DistanceFromQuality(quality: f32) -> f32 {
-        unsafe { JxlEncoderDistanceFromQuality(quality) }
+    pub fn DistanceFromQuality(quality: u8) -> f32 {
+        unsafe { JxlEncoderDistanceFromQuality(quality as f32) }
     }
 
-    pub  fn encode<W: Write + Seek>(&self, mut output: W, imgdata: DynamicImage) -> Result<(), Error> {
+    pub  fn encode<W: Write>(&self, mut output: W, imgdata: &Vec<u8>, options: EncoderOptions) -> Result<u64, Error> {
         unsafe {
             let num_worker_threads = JxlThreadParallelRunnerDefaultNumWorkerThreads();
             let runner_opaque = JxlThreadParallelRunnerCreate(null(), num_worker_threads);
@@ -65,17 +66,18 @@ impl LibJxlEncoder {
                 return Err(Error::JxlEncoder("SetParallelRunner".to_string()));
             }
 
-            let stream_start = output.stream_position().unwrap();
+            let stream_start = 0;//output.stream_position().unwrap();
             let output_box = Box::new(OutputProcessorStruct {
                 stream: Box::new(output),
                 stream_start,
+                bytes_written: 0,
                 buffer: None,
             });
             let output_processor = JxlEncoderOutputProcessor {
                 opaque: Box::into_raw(output_box) as *mut c_void,
                 get_buffer: Some(outputGetBuffer),
                 release_buffer: Some(outputReleaseBuffer),
-                seek: Some(outputSeek),
+                seek: None,
                 set_finalized_position: Some(outputSetFinal),
             };
             if JxlEncoderSetOutputProcessor(encoder, output_processor)
@@ -100,16 +102,22 @@ impl LibJxlEncoder {
             }
             let frame_bit_depth = Box::new(JxlBitDepth {
                 type_: JxlBitDepthType_JXL_BIT_DEPTH_FROM_PIXEL_FORMAT,
-                bits_per_sample: (imgdata.color().bits_per_pixel()
-                    / imgdata.color().channel_count() as u16) as u32,
-                exponent_bits_per_sample:
-                if imgdata.color() == ColorType::Rgb32F || imgdata.color() == ColorType::Rgba32F { 8 } else { 0 },
+                bits_per_sample: match options.depth() {
+                    BitDepth::Eight => 8,
+                    BitDepth::Sixteen => 16,
+                    BitDepth::Float32 => 32,
+                    _=> 0,
+                },
+                exponent_bits_per_sample: match options.depth() {
+                    BitDepth::Float32 => 8,
+                    _=> 0,
+                },
             });
             if JxlEncoderSetFrameBitDepth(settings, &*frame_bit_depth)
                 != JxlEncoderStatus_JXL_ENC_SUCCESS {
                 return Err(Error::JxlEncoder("SetFrameBitDepth".to_string()));
             }
-            if imgdata.color().has_alpha() {
+            if options.colorspace().has_alpha() {
                 if JxlEncoderSetExtraChannelDistance(settings, 0, self.distance.clone())
                     != JxlEncoderStatus_JXL_ENC_SUCCESS {
                     return Err(Error::JxlEncoder("SetExtraChannelDistance".to_string()));
@@ -122,26 +130,23 @@ impl LibJxlEncoder {
                 }
             }
 
-            let n_color_channels = match imgdata.color() {
-                ColorType::L8 | ColorType::L16 => 1,
-                ColorType::La8 | ColorType::La16 => 1,
-                _ => 3
-            };
+            let n_color_channels = if options.colorspace().is_grayscale() {1} else {3};
+            let n_alpha_channels = if options.colorspace().has_alpha() {1} else {0};
 
-            let n_alpha_channels = match imgdata.color() {
-                ColorType::La8 | ColorType::La16 => 1,
-                ColorType::Rgba8 | ColorType::Rgba16 => 1,
-                ColorType::Rgba32F => 1,
-                _ => 0
-            };
             let basic_info = Box::new(JxlBasicInfo {
                 have_container: 1,
-                xsize: imgdata.width(),
-                ysize: imgdata.height(),
-                bits_per_sample: (imgdata.color().bits_per_pixel()
-                    / imgdata.color().channel_count() as u16) as u32,
-                exponent_bits_per_sample:
-                if imgdata.color() == ColorType::Rgb32F || imgdata.color() == ColorType::Rgba32F { 8 } else { 0 },
+                xsize: options.width() as u32,
+                ysize: options.height() as u32,
+                bits_per_sample: match options.depth() {
+                    BitDepth::Eight => 8,
+                    BitDepth::Sixteen => 16,
+                    BitDepth::Float32 => 32,
+                    _=> 0,
+                },
+                exponent_bits_per_sample: match options.depth() {
+                    BitDepth::Float32 => 8,
+                    _=> 0,
+                },
                 intensity_target: 0.0,
                 min_nits: 0.0,
                 relative_to_max_display: 0,
@@ -154,10 +159,15 @@ impl LibJxlEncoder {
                 num_color_channels: n_color_channels,
                 num_extra_channels: n_alpha_channels,
                 alpha_bits:
-                if imgdata.color().has_alpha() {
-                    (imgdata.color().bits_per_pixel() / imgdata.color().channel_count() as u16) as u32
-                } else { 0 },
-                alpha_exponent_bits: if imgdata.color() == ColorType::Rgba32F { 8 } else { 0 },
+                if options.colorspace().has_alpha() {
+                    match options.depth() {
+                        BitDepth::Eight => 8,
+                        BitDepth::Sixteen => 16,
+                        BitDepth::Float32 => 32,
+                        _=> 0,
+                    } } else { 0 },
+                alpha_exponent_bits: if options.colorspace().has_alpha()
+                    && options.depth() == BitDepth::Float32 { 8 } else { 0 },
                 alpha_premultiplied: 0,
                 preview: JxlPreviewHeader { xsize: 0, ysize: 0 },
                 animation: JxlAnimationHeader {
@@ -166,8 +176,8 @@ impl LibJxlEncoder {
                     num_loops: 0,
                     have_timecodes: 0,
                 },
-                intrinsic_xsize: imgdata.width(),
-                intrinsic_ysize: imgdata.height(),
+                intrinsic_xsize: options.width() as u32,
+                intrinsic_ysize: options.height() as u32,
                 padding: [0; 100],
             });
             if JxlEncoderSetBasicInfo(encoder, &*basic_info)
@@ -205,21 +215,19 @@ impl LibJxlEncoder {
 
             // encode frame
             let pixelformat = Box::new(JxlPixelFormat {
-                num_channels: imgdata.color().channel_count() as u32,
+                num_channels: options.colorspace().num_components() as u32,
                 data_type:
-                match imgdata.color() {
-                    ColorType::L8 | ColorType::La8 => JxlDataType_JXL_TYPE_UINT8,
-                    ColorType::Rgb8 | ColorType::Rgba8 => JxlDataType_JXL_TYPE_UINT8,
-                    ColorType::L16 | ColorType::La16 => JxlDataType_JXL_TYPE_UINT16,
-                    ColorType::Rgb16 | ColorType::Rgba16 => JxlDataType_JXL_TYPE_UINT16,
-                    ColorType::Rgb32F | ColorType::Rgba32F => JxlDataType_JXL_TYPE_FLOAT,
+                match options.depth() {
+                    BitDepth::Eight => JxlDataType_JXL_TYPE_UINT8,
+                    BitDepth::Sixteen => JxlDataType_JXL_TYPE_UINT16,
+                    BitDepth::Float32 => JxlDataType_JXL_TYPE_FLOAT,
                     _ => todo!()
                 },
                 endianness: JxlEndianness_JXL_NATIVE_ENDIAN,
                 align: 0,
             });
             if JxlEncoderAddImageFrame(settings, &*pixelformat,
-                                       imgdata.as_bytes().as_ptr() as *const c_void, imgdata.as_bytes().len())
+                                       imgdata.as_ptr() as *const c_void, imgdata.len())
                 != JxlEncoderStatus_JXL_ENC_SUCCESS {
                 return Err(Error::JxlEncoder("AddImageFrame".to_string()));
             }
@@ -232,19 +240,20 @@ impl LibJxlEncoder {
 
             JxlEncoderDestroy(encoder);
             JxlThreadParallelRunnerDestroy(runner_opaque);
-            let _pointer_for_garbage = Box::from_raw(output_processor.opaque);
+            let outputprocessor = Box::from_raw(output_processor.opaque as *mut OutputProcessorStruct) ;
+            Ok(outputprocessor.bytes_written)
         }
-        Ok(())
     }
 }
 
-trait WriteAndSeek: Write + Seek {}
-impl<T: Write+Seek> WriteAndSeek for T {}
+trait WriteAndSeek: Write {}
+impl<T: Write> WriteAndSeek for T {}
 
 struct OutputProcessorStruct<'a>
 {
     stream: Box<dyn WriteAndSeek + 'a>,
     stream_start: u64,
+    bytes_written: u64,
     buffer: Option<Vec<u8>>,
 }
 
@@ -274,9 +283,12 @@ unsafe extern "C" fn outputReleaseBuffer
     s.stream.write_all(&b[0..written_bytes] ).expect("Writing JXL output failed");
 }
 
-unsafe extern "C" fn outputSeek(opaque: *mut c_void, position: u64) {
+/*unsafe extern "C" fn outputSeek(opaque: *mut c_void, position: u64) {
     let s = &mut *(opaque as *mut OutputProcessorStruct);
     s.stream.seek(SeekFrom::Start(&s.stream_start + position)).expect("Seeking JXL output failed");
-}
+}*/
 
-unsafe extern "C" fn outputSetFinal(_opaque: *mut c_void, _finalized_position: u64) {}
+unsafe extern "C" fn outputSetFinal(opaque: *mut c_void, finalized_position: u64) {
+    let s = &mut *(opaque as *mut OutputProcessorStruct);
+    s.bytes_written = finalized_position;
+}

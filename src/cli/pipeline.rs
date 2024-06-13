@@ -9,6 +9,8 @@ use rimage::codecs::mozjpeg::MozJpegEncoder;
 use rimage::codecs::oxipng::OxiPngEncoder;
 #[cfg(feature = "webp")]
 use rimage::codecs::webp::WebPEncoder;
+#[cfg(feature = "libjxl")]
+use rimage::codecs::libjxl::LibJxlEncoder;
 use zune_core::{bytestream::ZByteWriterTrait, options::EncoderOptions};
 use zune_image::{
     codecs::{
@@ -170,6 +172,8 @@ pub enum AvailableEncoders {
     Png(Box<PngEncoder>),
     Ppm(Box<PPMEncoder>),
     Qoi(Box<QoiEncoder>),
+    #[cfg(feature = "libjxl")]
+    LibJxl(Box<LibJxlEncoder>),
 }
 
 impl AvailableEncoders {
@@ -189,6 +193,8 @@ impl AvailableEncoders {
             AvailableEncoders::Png(_) => "png",
             AvailableEncoders::Ppm(_) => "ppm",
             AvailableEncoders::Qoi(_) => "qoi",
+            #[cfg(feature = "libjxl")]
+            AvailableEncoders::LibJxl(_) => "jxl",
         }
     }
 
@@ -208,6 +214,7 @@ impl AvailableEncoders {
             AvailableEncoders::Png(enc) => enc.encode(img, sink),
             AvailableEncoders::Ppm(enc) => enc.encode(img, sink),
             AvailableEncoders::Qoi(enc) => enc.encode(img, sink),
+            AvailableEncoders::LibJxl(enc) => enc.encode(img, sink),
         }
     }
 }
@@ -370,6 +377,8 @@ pub fn encoder(name: &str, matches: &ArgMatches) -> Result<AvailableEncoders, Im
         "png" => Ok(AvailableEncoders::Png(Box::new(PngEncoder::new()))),
         "ppm" => Ok(AvailableEncoders::Ppm(Box::new(PPMEncoder::new()))),
         "qoi" => Ok(AvailableEncoders::Qoi(Box::new(QoiEncoder::new()))),
+        #[cfg(feature = "libjxl")]
+        "libjxl" => Ok(AvailableEncoders::LibJxl(Box::new(LibJxlEncoder::new()))),
 
         name => Err(ImageErrors::GenericString(format!(
             "Encoder \"{name}\" not found",
